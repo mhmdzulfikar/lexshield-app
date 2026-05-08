@@ -1,20 +1,47 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+⚖️ LexShield: Tameng Hukum Digital Rakyat
+Built for #JuaraVibeCoding Hackathon by Google Cloud & DeepMind
 
-# Run and deploy your AI Studio app
+📌 Latar Belakang Masalah
+Ketimpangan informasi hukum (information asymmetry) sering dimanfaatkan oleh pihak yang lebih kuat. Mahasiswa terjebak kontrak magang sepihak, pekerja lepas (freelancer) tertipu pasal karet, dan UMKM dirugikan oleh perjanjian sewa yang manipulatif. Orang awam tidak memiliki akses cepat ke konsultan hukum untuk membedah dokumen ini.
 
+💡 Solusi: LexShield
+LexShield adalah asisten hukum berbasis AI yang berfungsi sebagai "Tameng Hukum Digital". Hanya dengan mengunggah draf kontrak atau syarat ketentuan (T&C), aplikasi ini akan melakukan audit instan untuk mendeteksi pasal jebakan, menganalisis risiko jangka panjang, dan memberikan referensi hukum Indonesia (KUHPerdata, POJK, dll) secara akurat.
+
+✨ Fitur Utama:
+Manipulative Language Detector: Mendeteksi kalimat pasif atau frasa ambigu (misal: "pelepasan hak gugat").
+
+Time-Travel Risk Analysis: Memprediksi dampak jangka pendek (biaya tersembunyi/denda harian) dan jangka panjang (inflasi/eskalasi sewa).
+
+Legal Grounding: Setiap peringatan dilengkapi dengan landasan referensi hukum yang berlaku di Indonesia.
+
+Auto-Drafter Negotiation: Membuat draf pesan profesional untuk menuntut revisi pasal yang merugikan.
+
+🛠️ Tech Stack
+AI Model: Google Gemini 1.5 Pro (via Google AI Studio)
+
+Frontend: React + Vite + Tailwind CSS
+
+Deployment: Google Cloud Run (Serverless)
+
+---
+
+🚀 Run Locally (AI Studio Setup)
 This contains everything you need to run your app locally.
+View the app logic in AI Studio: LexShield VibeCoding App
 
-View your app in AI Studio: https://ai.studio/apps/a69ba28f-7867-4b7d-b1f4-759cd64d45a2
+Prerequisites: Node.js (v18+)
 
-## Run Locally
+Install dependencies:
 
-**Prerequisites:**  Node.js
+Bash
+npm install
+Set your environment variables:
+Create a .env file in the root directory and add your Gemini API Key:
 
+Cuplikan kode
+GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+APP_URL="https://lexshield-app-473068843669.asia-southeast2.run.app"
+Run the development server:
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Bash
+npm run dev
