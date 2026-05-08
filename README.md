@@ -41,7 +41,7 @@ Create a .env file in the root directory and add your Gemini API Key:
 Cuplikan kode
 VITE_GEMINI_API_KEY="VITE_GEMINI_API_KEY"
 
-APP_URL="https://lexshield-app-473068843669.asia-southeast2.run.app"
+APP_URL=""
 Run the development server:
 
 Bash
