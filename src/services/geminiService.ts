@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 export interface AnalysisResponse {
   skor_keamanan: number;
@@ -13,38 +13,51 @@ export interface AnalysisResponse {
   draf_negosiasi: string;
 }
 
-const SYSTEM_INSTRUCTION = `Role: Anda adalah "LexShield"... (Isi instruksi lu tetap sama)`;
+const SYSTEM_INSTRUCTION = `Role: Anda adalah "LexShield", seorang Pengacara Korporat dan Konsultan Hukum senior di Indonesia yang sangat ahli dalam Hukum Perdata (KUHPerdata), Hukum Ketenagakerjaan (UU Cipta Kerja), UU ITE, dan Peraturan OJK (POJK).
+Tugas: Menganalisis dokumen perjanjian, kontrak kerja, kontrak sewa, atau syarat ketentuan pinjaman yang diunggah pengguna.
+Pendeteksi Jebakan: Cari bahasa ambigu, kalimat pasif yang merugikan (misal: "tidak dapat diganggu gugat", "denda tanpa batas waktu", "pelepasan hak").
+Time-Travel Risk: Analisis dampak Jangka Pendek dan Jangka Panjang.
+Grounding Hukum: SETIAP temuan BAHAYA atau PERINGATAN WAJIB mencantumkan referensi pasal hukum Indonesia yang relevan.
+
+Format Output (STRICT JSON ONLY):
+{
+  "skor_keamanan": 0-100,
+  "ringkasan_singkat": "string",
+  "analisis_pasal": [
+    {
+      "bagian_kontrak": "string",
+      "status": "AMAN | PERINGATAN | BAHAYA",
+      "analisis_dan_referensi": "string (wajib pasal hukum)",
+      "dampak_jangka_panjang": "string",
+      "rekomendasi_aksi": "string"
+    }
+  ],
+  "draf_negosiasi": "string"
+}`;
 
 export async function analyzeDocument(text: string): Promise<AnalysisResponse> {
-  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBZ9bbxEMTghhwDlkKcseyhnblocOvHRYY";
 
   if (!API_KEY) {
-    throw new Error("API Key tidak ditemukan. Pastikan VITE_GEMINI_API_KEY sudah diset.");
+    throw new Error("GEMINI_API_KEY is not configured.");
   }
 
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+
   try {
-    // 1. Inisialisasi dengan Class yang benar: GoogleGenerativeAI (Bukan GoogleGenAI)
-    const genAI = new GoogleGenerativeAI(API_KEY);
-
-    // 2. Ambil model menggunakan getGenerativeModel
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      systemInstruction: SYSTEM_INSTRUCTION
-    });
-
-    // 3. Jalankan generateContent dengan struktur config yang benar
-    const result = await model.generateContent({
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: `Analisis dokumen berikut:\n\n${text}` }] }],
-      generationConfig: {
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
         temperature: 0.2,
+        topP: 0.8,
+        topK: 40,
         responseMimeType: "application/json",
       },
     });
 
-    // 4. Cara ambil teks di SDK terbaru
-    const response = await result.response;
-    const responseText = response.text();
-
+    const responseText = response.text;
     if (!responseText) {
       throw new Error("Empty response from AI");
     }

@@ -42,8 +42,8 @@ export default function App() {
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
-    } catch (err) {
-      setError("Gagal menganalisis dokumen. Pastikan kunci API Gemini sudah terpasang.");
+    } catch (err: any) {
+      setError(`Error: ${err.message || "Terjadi kesalahan yang tidak diketahui."}`);
       console.error(err);
     } finally {
       setIsAnalyzing(false);
@@ -241,7 +241,7 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-center">
                       <span className="block text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">Pasal Temuan</span>
-                      <span className="text-2xl font-black text-slate-800">{result.analisis_pasal.length}</span>
+                      <span className="text-2xl font-black text-slate-800">{result.analisis_pasal?.length || 0}</span>
                     </div>
                     <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-center">
                       <span className="block text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">Draf Status</span>
@@ -272,7 +272,7 @@ export default function App() {
                   <h2 className="text-3xl font-black tracking-tight text-slate-900 font-serif lowercase italic underline decoration-blue-500 underline-offset-8">
                     critical clauses.
                   </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Menampilkan {result.analisis_pasal.length} temuan analisis</p>
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Menampilkan {result.analisis_pasal?.length || 0} temuan analisis</p>
                 </div>
                 <button 
                   onClick={() => setResult(null)}
@@ -284,7 +284,7 @@ export default function App() {
               </div>
 
               <div className="space-y-6 flex-1 overflow-y-auto pr-4">
-                {result.analisis_pasal.map((pasal, idx) => (
+                {(result.analisis_pasal || []).map((pasal, idx) => (
                   <motion.div
                     key={idx}
                     initial={{ opacity: 0, y: 20 }}
