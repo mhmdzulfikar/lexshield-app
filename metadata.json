@@ -1,0 +1,6 @@
+{
+  "name": "LexShield - Legal Document Analyzer",
+  "description": "AI-powered legal document analyzer specializing in Indonesian Law (KUHPerdata, UU Cipta Kerja, UU ITE, POJK) to detect hidden traps and protect your rights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
