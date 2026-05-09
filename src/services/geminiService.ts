@@ -101,3 +101,53 @@ export async function analyzeDocument(input: DocumentInput): Promise<AnalysisRes
     throw error;
   }
 }
+
+export interface ChatMessage {
+  role: "user" | "model";
+  text: string;
+}
+
+export async function chatWithLexShield(
+  documentContext: AnalysisResponse,
+  history: ChatMessage[],
+  newMessage: string
+): Promise<string> {
+  const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "";
+  if (!API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
+
+  const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+  const systemPrompt = `Anda adalah "LexShield Co-Counsel", asisten hukum profesional di Indonesia.
+Anda sedang berdiskusi dengan klien atau pengacara mengenai dokumen yang baru saja dianalisis.
+Berikut adalah hasil ringkasan analisis dokumen tersebut:
+${JSON.stringify({
+  ringkasan: documentContext.ringkasan_singkat,
+  pasal_berbahaya: documentContext.analisis_pasal.filter(p => p.status !== 'AMAN').map(p => ({ pasal: p.bagian_kontrak, isu: p.analisis_dan_referensi }))
+}, null, 2)}
+
+Tugas Anda: Jawab pertanyaan pengguna dengan akurat, mengacu pada hukum Indonesia (KUHPerdata, UU Ciptaker, UU ITE, dll).
+Gunakan bahasa profesional, ringkas, dan langsung menjawab inti pertanyaan.`;
+
+  const contents = history.map(msg => ({
+    role: msg.role,
+    parts: [{ text: msg.text }]
+  }));
+  
+  contents.push({ role: "user", parts: [{ text: newMessage }] });
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: contents,
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.3,
+      }
+    });
+
+    return response.text || "Maaf, terjadi kesalahan saat memproses jawaban.";
+  } catch (error) {
+    console.error("Chat Error:", error);
+    throw error;
+  }
+}

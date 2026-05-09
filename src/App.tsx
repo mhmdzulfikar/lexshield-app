@@ -18,9 +18,13 @@ import {
   Printer,
   Upload,
   Image as ImageIcon,
-  X
+  X,
+  Send,
+  Bot,
+  Sparkles,
+  Check
 } from "lucide-react";
-import { analyzeDocument, type AnalysisResponse, type DocumentInput } from "./services/geminiService";
+import { analyzeDocument, chatWithLexShield, type AnalysisResponse, type DocumentInput, type ChatMessage } from "./services/geminiService";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -36,7 +40,13 @@ export default function App() {
   const [result, setResult] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState("Menganalisis...");
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatting, setIsChatting] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Dynamic loading text effect
   useEffect(() => {
@@ -89,6 +99,7 @@ export default function App() {
         files: processedFiles
       });
       setResult(response);
+      setChatHistory([]); // Reset chat history on new analysis
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
@@ -98,6 +109,50 @@ export default function App() {
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const handleChat = async () => {
+    if (!chatInput.trim() || !result) return;
+    
+    const newMessage = chatInput.trim();
+    setChatInput("");
+    setChatHistory(prev => [...prev, { role: "user", text: newMessage }]);
+    setIsChatting(true);
+
+    try {
+      const response = await chatWithLexShield(result, chatHistory, newMessage);
+      setChatHistory(prev => [...prev, { role: "model", text: response }]);
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+    } catch (err) {
+      setChatHistory(prev => [...prev, { role: "model", text: "Maaf, terjadi kesalahan jaringan. Coba lagi." }]);
+    } finally {
+      setIsChatting(false);
+    }
+  };
+
+  const handleCopyChat = (text: string, index: number) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  const renderMarkdown = (text: string) => {
+    if (!text) return { __html: "" };
+    let html = text
+      // Escape HTML first
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      // Bold
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Headers
+      .replace(/^### (.*$)/gim, '<strong class="block mt-2 mb-1 text-slate-800">$1</strong>')
+      .replace(/^## (.*$)/gim, '<strong class="block mt-2 mb-1 text-[1.1em] text-slate-900">$1</strong>')
+      .replace(/^# (.*$)/gim, '<strong class="block mt-3 mb-2 text-[1.2em] text-black">$1</strong>')
+      // Italic (after headers to avoid conflicts)
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // Lists
+      .replace(/^- (.*$)/gim, '<li class="ml-4 list-disc">$1</li>');
+
+    return { __html: html };
   };
 
   const getScoreColorClass = (score: number) => {
@@ -143,10 +198,12 @@ export default function App() {
         <div className="flex items-center gap-6">
           <div className="hidden md:flex gap-2 items-center">
             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Analyst Mode: Senior Corporate</span>
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mr-4">Enterprise Edition</span>
+            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+            <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Mode: Legal Audit</span>
           </div>
           <button 
-            onClick={() => { setInputText(""); setSelectedFiles([]); setResult(null); }}
+            onClick={() => { setInputText(""); setSelectedFiles([]); setResult(null); setChatHistory([]); }}
             className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold uppercase tracking-wider rounded transition-all active:scale-95 shadow-lg shadow-blue-900/20"
           >
             New Analysis
@@ -168,6 +225,15 @@ export default function App() {
                   Pelindung Praktik Hukum Anda
                 </h2>
                 <p className="text-slate-500 text-lg">Menganalisis draf kontrak secara instan dengan kecerdasan LexShield AI.</p>
+                <div className="pt-2">
+                  <button 
+                    onClick={() => setShowFeatures(true)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-full text-xs font-bold transition-all shadow-sm hover:shadow border border-slate-200 active:scale-95"
+                  >
+                    <Sparkles className="w-4 h-4 text-blue-500" />
+                    Apa Saja Fitur LexShield?
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden input-section">
@@ -357,10 +423,31 @@ export default function App() {
                       <span className="block text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">Pasal Temuan</span>
                       <span className="text-2xl font-black text-slate-800">{result.analisis_pasal?.length || 0}</span>
                     </div>
-                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-center">
-                      <span className="block text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">Draf Status</span>
-                      <span className="text-xs font-black text-emerald-600 uppercase">Generated</span>
+                    <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl text-center flex flex-col justify-center items-center">
+                      <span className="block text-[10px] uppercase text-slate-400 font-black tracking-widest mb-1">AI Chat</span>
+                      <span className="text-xs font-black text-blue-600 uppercase flex items-center gap-1"><Bot className="w-3 h-3"/> Active</span>
                     </div>
+                  </div>
+
+                  <div className="p-5 rounded-2xl bg-amber-50/50 border border-amber-100 relative overflow-hidden group">
+                    <h3 className="text-xs font-black text-amber-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                      <MessageSquareQuote className="w-4 h-4 text-amber-600" />
+                      Draf Email Negosiasi
+                    </h3>
+                    <div className="bg-white p-3.5 rounded-xl border border-amber-100/50 text-xs text-slate-600 italic leading-relaxed max-h-36 overflow-y-auto mb-3 shadow-inner whitespace-pre-wrap">
+                      {result.draf_negosiasi}
+                    </div>
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(result.draf_negosiasi);
+                        // Optional: Could use a toast here instead of alert for better UX, but alert works for now
+                        alert("Draf email berhasil disalin!");
+                      }}
+                      className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-md transition-colors flex justify-center items-center gap-2 active:scale-95"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Salin Teks
+                    </button>
                   </div>
                 </div>
               </div>
@@ -436,9 +523,10 @@ export default function App() {
 
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
                         <div className="md:col-span-8 space-y-4">
-                          <p className="text-sm text-slate-600 leading-relaxed">
-                            {pasal.analisis_dan_referensi}
-                          </p>
+                          <div 
+                            className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap"
+                            dangerouslySetInnerHTML={renderMarkdown(pasal.analisis_dan_referensi)}
+                          />
                           <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-100 flex gap-3">
                             <Clock className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                             <div className="space-y-1">
@@ -463,51 +551,65 @@ export default function App() {
                   </motion.div>
                 ))}
               </div>
+
+              {/* Chat Co-Counsel UI */}
+              <div className="mt-6 pt-6 border-t border-slate-200 shrink-0 no-print">
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <Bot className="w-4 h-4 text-blue-600" />
+                  Tanya LexShield Co-Counsel
+                </h3>
+                
+                {chatHistory.length > 0 && (
+                  <div className="bg-white rounded-xl p-4 mb-4 shadow-inner border border-slate-100 h-48 overflow-y-auto space-y-4 text-sm flex flex-col">
+                    {chatHistory.map((msg, i) => (
+                      <div key={i} className={cn("max-w-[85%] rounded-2xl px-4 py-3 relative group", msg.role === "user" ? "bg-slate-900 text-white self-end rounded-br-sm" : "bg-blue-50 text-slate-800 border border-blue-100 self-start rounded-bl-sm")}>
+                        <div 
+                          className="whitespace-pre-wrap leading-relaxed [&>li]:mt-1" 
+                          dangerouslySetInnerHTML={renderMarkdown(msg.text)} 
+                        />
+                        {msg.role === "model" && (
+                          <button
+                            onClick={() => handleCopyChat(msg.text, i)}
+                            className="absolute -right-10 top-2 p-1.5 bg-white text-slate-400 hover:text-blue-600 border border-slate-200 hover:border-blue-200 rounded-md opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                            title="Salin Teks"
+                          >
+                            {copiedIndex === i ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {isChatting && (
+                      <div className="bg-blue-50 text-slate-500 border border-blue-100 self-start rounded-2xl rounded-bl-sm px-4 py-3 text-xs font-bold italic flex items-center gap-2">
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        Sedang mengetik...
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleChat()}
+                    placeholder="Tanya soal pasal tertentu, minta revisi bahasa, dsb..."
+                    className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 shadow-sm"
+                  />
+                  <button 
+                    onClick={handleChat}
+                    disabled={isChatting || !chatInput.trim()}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-300 text-white p-3 rounded-xl transition-colors shadow-sm"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
             </section>
           </div>
         )}
       </main>
-
-      {/* Negotiation Footer (Only visible when result exists) */}
-      <AnimatePresence>
-        {result && (
-          <motion.footer 
-            initial={{ y: 100 }}
-            animate={{ y: 0 }}
-            exit={{ y: 100 }}
-            className="h-28 bg-white border-t border-slate-200 p-6 flex gap-8 items-center shrink-0 z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]"
-          >
-            <div className="flex-1 flex flex-col overflow-hidden max-w-4xl">
-              <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
-                <MessageSquareQuote className="w-3.5 h-3.5" />
-                Draf Negosiasi (Auto-Generated)
-              </span>
-              <div className="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-700 italic leading-relaxed overflow-hidden whitespace-nowrap text-ellipsis relative font-medium">
-                "{result.draf_negosiasi}"
-                <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-slate-50 to-transparent"></div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2 w-52 shrink-0">
-              <button 
-                onClick={() => {
-                  navigator.clipboard.writeText(result.draf_negosiasi);
-                  alert("Draf negosiasi disalin!");
-                }}
-                className="w-full py-2 bg-slate-900 text-white rounded-lg text-xs font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all hover:bg-slate-800 flex items-center justify-center gap-2"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                Salin Pesan
-              </button>
-              <button 
-                className="w-full py-2 border-2 border-slate-200 text-slate-500 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 hover:text-slate-900 transition-all font-sans"
-                onClick={() => alert(result.draf_negosiasi)}
-              >
-                View Full Message
-              </button>
-            </div>
-          </motion.footer>
-        )}
-      </AnimatePresence>
 
       {/* Disclaimer Modal */}
       <AnimatePresence>
@@ -555,6 +657,84 @@ export default function App() {
                   className="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
                 >
                   Saya Mengerti
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Features Modal */}
+      <AnimatePresence>
+        {showFeatures && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setShowFeatures(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-6 border-b border-slate-100 bg-blue-50/50 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-lg">Fitur Unggulan LexShield</h3>
+                </div>
+                <button onClick={() => setShowFeatures(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 text-sm text-slate-600 space-y-6">
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2 hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-2 font-bold text-blue-700">
+                      <ImageIcon className="w-4 h-4" />
+                      Multimodal Document Upload
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-500">Tidak perlu repot <em>copy-paste</em> teks. Cukup unggah file kontrak Anda berformat <strong>PDF</strong> atau <strong>Foto pindaian (JPG/PNG)</strong>. AI LexShield akan membacanya secara otomatis layaknya pengacara sungguhan.</p>
+                  </div>
+                  
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2 hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-2 font-bold text-blue-700">
+                      <Gavel className="w-4 h-4" />
+                      Super-Prompt Hukum RI
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-500">Keakuratan tinggi. AI dikalibrasi untuk memahami <strong>Pasal 1320 KUHPerdata</strong> (Syarat Sah Perjanjian), <strong>UU Cipta Kerja 2023</strong>, dan <strong>UU Perlindungan Konsumen</strong> (mendeteksi klausul baku/pelepasan tanggung jawab).</p>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2 hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-2 font-bold text-blue-700">
+                      <Bot className="w-4 h-4" />
+                      LexShield Co-Counsel Chat
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-500">Setelah hasil audit keluar, Anda dapat <em>chatting</em> dan bertanya langsung tentang poin-poin yang membingungkan. AI memiliki memori kontekstual yang kuat dari kontrak yang sedang dibedah.</p>
+                  </div>
+
+                  <div className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-2 hover:border-blue-200 transition-colors">
+                    <div className="flex items-center gap-2 font-bold text-blue-700">
+                      <Printer className="w-4 h-4" />
+                      Zero-Cost PDF Export
+                    </div>
+                    <p className="text-xs leading-relaxed text-slate-500">Klik "Cetak PDF" pada laporan untuk mengekspor <em>Legal Audit Report</em> yang sangat rapi. UI akan menyesuaikan layout A4 secara otomatis via <em>media print hack</em> tanpa biaya server tambahan.</p>
+                  </div>
+                </div>
+
+              </div>
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+                <button 
+                  onClick={() => setShowFeatures(false)}
+                  className="px-6 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-md"
+                >
+                  Cobain Sekarang
                 </button>
               </div>
             </motion.div>
