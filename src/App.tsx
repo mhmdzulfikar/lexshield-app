@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   ShieldAlert, 
@@ -14,9 +14,13 @@ import {
   Search,
   Gavel,
   Clock,
-  MessageSquareQuote
+  MessageSquareQuote,
+  Printer,
+  Upload,
+  Image as ImageIcon,
+  X
 } from "lucide-react";
-import { analyzeDocument, type AnalysisResponse } from "./services/geminiService";
+import { analyzeDocument, type AnalysisResponse, type DocumentInput } from "./services/geminiService";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -26,18 +30,64 @@ function cn(...inputs: ClassValue[]) {
 
 export default function App() {
   const [inputText, setInputText] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [result, setResult] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingText, setLoadingText] = useState("Menganalisis...");
   const resultRef = useRef<HTMLDivElement>(null);
 
+  // Dynamic loading text effect
+  useEffect(() => {
+    if (!isAnalyzing) return;
+    
+    const texts = [
+      "Membaca dokumen kontrak...",
+      "Mencari jebakan hukum yang tersembunyi...",
+      "Mencocokkan dengan UU Cipta Kerja & KUHPerdata...",
+      "Menyusun strategi negosiasi..."
+    ];
+    
+    let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % texts.length;
+      setLoadingText(texts[i]);
+    }, 2500);
+    
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const encoded = reader.result?.toString() || "";
+        const base64Str = encoded.split(",")[1];
+        resolve(base64Str);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
   const handleAnalyze = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && selectedFiles.length === 0) return;
     
     setIsAnalyzing(true);
     setError(null);
     try {
-      const response = await analyzeDocument(inputText);
+      const processedFiles = await Promise.all(
+        selectedFiles.map(async (f) => ({
+          mimeType: f.type,
+          data: await fileToBase64(f)
+        }))
+      );
+
+      const response = await analyzeDocument({
+        text: inputText,
+        files: processedFiles
+      });
       setResult(response);
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -96,7 +146,7 @@ export default function App() {
             <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Analyst Mode: Senior Corporate</span>
           </div>
           <button 
-            onClick={() => { setInputText(""); setResult(null); }}
+            onClick={() => { setInputText(""); setSelectedFiles([]); setResult(null); }}
             className="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold uppercase tracking-wider rounded transition-all active:scale-95 shadow-lg shadow-blue-900/20"
           >
             New Analysis
@@ -113,12 +163,14 @@ export default function App() {
               animate={{ opacity: 1, scale: 1 }}
               className="w-full max-w-3xl space-y-8 py-12"
             >
-              <div className="text-center space-y-3">
-                <h2 className="text-4xl font-serif font-bold text-slate-900 tracking-tight">Pelindung Praktik Hukum Anda</h2>
+              <div className="text-center space-y-3 relative">
+                <h2 className="text-4xl font-serif font-bold text-slate-900 tracking-tight flex items-center justify-center gap-3">
+                  Pelindung Praktik Hukum Anda
+                </h2>
                 <p className="text-slate-500 text-lg">Menganalisis draf kontrak secara instan dengan kecerdasan LexShield AI.</p>
               </div>
 
-              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden input-section">
                 <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" />
@@ -131,13 +183,54 @@ export default function App() {
                   </div>
                 </div>
                 <div className="p-8">
-                  <textarea
-                    autoFocus
-                    className="w-full h-80 p-6 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 transition-all outline-none resize-none text-slate-700 leading-relaxed font-medium placeholder:text-slate-300"
-                    placeholder="Tempelkan isi kontrak (Sewa, Kerja, Pinjaman, dsb) di sini..."
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                  />
+                  <div className="relative group">
+                    <textarea
+                      autoFocus
+                      className="w-full h-80 p-6 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-blue-500 transition-all outline-none resize-none text-slate-700 leading-relaxed font-medium placeholder:text-slate-300 pb-28"
+                      placeholder="Tempelkan isi kontrak di sini, ATAU upload file PDF/Foto Kontrak Anda di bawah..."
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                    />
+                    
+                    {/* Multimodal File Upload Zone */}
+                    <div className="absolute bottom-4 left-4 right-4 bg-white border border-slate-200 rounded-lg p-3 flex flex-col gap-2 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <label className="cursor-pointer flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-md border border-blue-200 shadow-sm active:scale-95">
+                          <Upload className="w-4 h-4" />
+                          Upload PDF / Foto Kontrak
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            multiple 
+                            accept=".pdf,image/*"
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                setSelectedFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                              }
+                            }}
+                          />
+                        </label>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hidden sm:flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                          Gemini Vision Enabled
+                        </span>
+                      </div>
+                      
+                      {selectedFiles.length > 0 && (
+                        <div className="flex gap-2 flex-wrap mt-2 pt-2 border-t border-slate-100">
+                          {selectedFiles.map((f, i) => (
+                            <div key={i} className="flex items-center gap-1.5 bg-slate-50 px-2 py-1.5 rounded text-[10px] font-bold text-slate-600 border border-slate-200 shadow-sm">
+                              {f.type.includes("pdf") ? <FileText className="w-3.5 h-3.5 text-rose-500" /> : <ImageIcon className="w-3.5 h-3.5 text-emerald-500" />}
+                              <span className="truncate max-w-[120px]">{f.name}</span>
+                              <button onClick={() => setSelectedFiles(prev => prev.filter((_, idx) => idx !== i))} className="ml-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded p-0.5 transition-colors">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   
                   <div className="mt-8 flex flex-col sm:flex-row gap-6 items-center justify-between">
                     <div className="grid grid-cols-2 gap-x-8 gap-y-3">
@@ -161,10 +254,10 @@ export default function App() {
                     
                     <button
                       onClick={handleAnalyze}
-                      disabled={isAnalyzing || !inputText.trim()}
+                      disabled={isAnalyzing || (!inputText.trim() && selectedFiles.length === 0)}
                       className={cn(
-                        "px-10 py-4 rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-3 transition-all shadow-xl active:scale-95",
-                        isAnalyzing || !inputText.trim() 
+                        "px-10 py-4 rounded-xl font-black text-sm uppercase tracking-widest flex items-center gap-3 transition-all shadow-xl active:scale-95 max-w-full sm:max-w-sm overflow-hidden",
+                        isAnalyzing || (!inputText.trim() && selectedFiles.length === 0) 
                           ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" 
                           : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-slate-400/20"
                       )}
@@ -174,10 +267,31 @@ export default function App() {
                       ) : (
                         <ShieldCheck className="w-5 h-5 text-blue-400" />
                       )}
-                      {isAnalyzing ? "Menganalisis..." : "Mulai Analisis Hukum"}
+                      <AnimatePresence mode="wait">
+                        <motion.span
+                          key={isAnalyzing ? loadingText : "Mulai Analisis Hukum"}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="truncate"
+                        >
+                          {isAnalyzing ? loadingText : "Mulai Analisis Hukum"}
+                        </motion.span>
+                      </AnimatePresence>
                     </button>
                   </div>
                 </div>
+              </div>
+              
+              <div className="text-center text-xs text-slate-400 font-medium flex items-center justify-center gap-1.5 flex-wrap">
+                LexShield AI dapat melakukan kesalahan.
+                <button 
+                  onClick={() => setShowDisclaimer(true)}
+                  className="text-amber-500 hover:text-amber-600 underline underline-offset-2 transition-colors inline-flex items-center gap-1 font-bold"
+                >
+                  <AlertTriangle className="w-3 h-3" />
+                  Lihat Batasan & Disclaimer Hukum
+                </button>
               </div>
               
               {error && (
@@ -274,13 +388,22 @@ export default function App() {
                   </h2>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Menampilkan {result.analisis_pasal?.length || 0} temuan analisis</p>
                 </div>
-                <button 
-                  onClick={() => setResult(null)}
-                  className="text-xs font-bold uppercase text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Re-analyze
-                </button>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => window.print()}
+                    className="text-xs font-bold uppercase text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-colors no-print px-3 py-1.5 bg-slate-200 rounded"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Cetak PDF
+                  </button>
+                  <button 
+                    onClick={() => setResult(null)}
+                    className="text-xs font-bold uppercase text-blue-600 hover:text-blue-700 flex items-center gap-1 transition-colors no-print"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Re-analyze
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-6 flex-1 overflow-y-auto pr-4">
@@ -291,7 +414,7 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
                     className={cn(
-                      "group bg-white rounded-2xl shadow-sm border-l-4 overflow-hidden hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300",
+                      "clause-card group bg-white rounded-2xl shadow-sm border-l-4 overflow-hidden hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300",
                       getStatusBorder(pasal.status)
                     )}
                   >
@@ -383,6 +506,59 @@ export default function App() {
               </button>
             </div>
           </motion.footer>
+        )}
+      </AnimatePresence>
+
+      {/* Disclaimer Modal */}
+      <AnimatePresence>
+        {showDisclaimer && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setShowDisclaimer(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]"
+            >
+              <div className="p-6 border-b border-slate-100 bg-amber-50/50 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                    <AlertTriangle className="w-5 h-5" />
+                  </div>
+                  <h3 className="font-bold text-slate-800 text-lg">Disclaimer & Keterbatasan AI</h3>
+                </div>
+                <button onClick={() => setShowDisclaimer(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 text-sm text-slate-600 space-y-4 leading-relaxed">
+                <p><strong>PENTING:</strong> LexShield adalah AI asisten dan <strong>BUKAN</strong> pengganti nasihat hukum profesional dari Advokat/Konsultan Hukum berlisensi. Harap perhatikan keterbatasan berikut terkait Hukum di Indonesia:</p>
+                <ul className="space-y-3 list-none mt-4">
+                  <li className="flex gap-3 items-start"><span className="text-amber-500 mt-0.5">⚠️</span> <span><strong>Hukum Dinamis:</strong> AI mungkin tidak selalu <em>up-to-date</em> dengan revisi UU terbaru (seperti putusan MK terbaru atau PP pelaksana UU Cipta Kerja).</span></li>
+                  <li className="flex gap-3 items-start"><span className="text-amber-500 mt-0.5">⚠️</span> <span><strong>Syarat Sah Perjanjian:</strong> AI menganalisis teks, namun pengadilan dapat membatalkan kontrak jika syarat objektif (Pasal 1320 KUHPerdata) tidak terpenuhi di dunia nyata.</span></li>
+                  <li className="flex gap-3 items-start"><span className="text-amber-500 mt-0.5">⚠️</span> <span><strong>Bahasa Asing:</strong> Kontrak antar entitas Indonesia wajib berbahasa Indonesia (UU 24/2009). AI bisa menganalisis bahasa Inggris, tapi kontrak tersebut berisiko batal demi hukum.</span></li>
+                  <li className="flex gap-3 items-start"><span className="text-amber-500 mt-0.5">⚠️</span> <span><strong>Pembuktian Hukum:</strong> AI tidak dapat memverifikasi keabsahan e-Meterai atau Tanda Tangan Elektronik tersertifikasi sesuai UU ITE.</span></li>
+                </ul>
+                <div className="mt-6 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-500 italic">
+                  Selalu konsultasikan keputusan final Anda dengan praktisi hukum yang berkualifikasi. Jangan mengambil keputusan bisnis berskala besar murni 100% dari hasil analisis AI ini.
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+                <button 
+                  onClick={() => setShowDisclaimer(false)}
+                  className="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  Saya Mengerti
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -17,3 +17,60 @@
     @apply bg-slate-50 text-slate-900 font-sans;
   }
 }
+
+/* Print Specific Styles for Zero-Cost PDF Export Hack */
+@media print {
+  @page { margin: 1.5cm; }
+  
+  body {
+    background: white !important;
+    overflow: visible !important;
+  }
+  
+  /* Hide non-essential UI elements when printing */
+  .no-print, header, footer, button, .input-section {
+    display: none !important;
+  }
+
+  /* Force page breaks cleanly */
+  .clause-card {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Remove shadow and background for print clarity */
+  main, section, div {
+    box-shadow: none !important;
+    background-color: white !important;
+    color: black !important;
+  }
+  
+  /* Reset layout constraints for printing */
+  main {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .overflow-hidden {
+    overflow: visible !important;
+  }
+  .overflow-y-auto {
+    overflow: visible !important;
+  }
+  .h-screen {
+    height: auto !important;
+  }
+  
+  /* Print-specific layout: Stack columns instead of side-by-side */
+  .grid-cols-12 {
+    display: block !important;
+  }
+  .lg\:col-span-4, .lg\:col-span-8 {
+    width: 100% !important;
+    border: none !important;
+  }
+  
+  /* Dark borders instead of light borders for contrast */
+  .border-slate-100, .border-slate-200 {
+    border-color: #cbd5e1 !important;
+  }
+}
